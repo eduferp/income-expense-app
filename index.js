@@ -5,19 +5,15 @@ const { Pool } = require("pg");
 const app = express();
 app.use(express.json());
 
-// =======================
-// CONEXIÓN POSTGRES (Railway OK)
-// =======================
+// Conexión a PostgreSQL
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: {
-    rejectUnauthorized: false,
+    rejectUnauthorized: false, // IMPORTANTE para Railway
   },
 });
 
-// =======================
-// RUTA BASE
-// =======================
+// Ruta base
 app.get("/", (req, res) => {
   res.send("API de Ingresos y Egresos con PostgreSQL 🚀");
 });
@@ -28,27 +24,17 @@ app.get("/", (req, res) => {
 
 // Crear ingreso
 app.post("/ingresos", async (req, res) => {
-  // Acepta ambos formatos
-  const descripcion = req.body.descripcion || req.body.description;
-  const monto = req.body.monto || req.body.amount;
-
-  if (!descripcion || !monto) {
-    return res.status(400).json({
-      error: "descripcion y monto son requeridos",
-    });
-  }
+  const { description, amount } = req.body;
 
   try {
     const result = await pool.query(
-      `INSERT INTO transactions (description, amount, type)
-       VALUES ($1, $2, 'ingreso')
-       RETURNING *`,
-      [descripcion, monto]
+      "INSERT INTO transactions (description, amount, type) VALUES ($1, $2, 'ingreso') RETURNING *",
+      [description, amount]
     );
 
     res.status(201).json(result.rows[0]);
   } catch (error) {
-    console.error("ERROR INGRESO:", error.message);
+    console.error("ERROR INGRESOS:", error);
     res.status(500).json({ error: "Error al crear ingreso" });
   }
 });
@@ -61,7 +47,7 @@ app.get("/ingresos", async (req, res) => {
     );
     res.json(result.rows);
   } catch (error) {
-    console.error(error.message);
+    console.error(error);
     res.status(500).json({ error: "Error al obtener ingresos" });
   }
 });
@@ -72,26 +58,17 @@ app.get("/ingresos", async (req, res) => {
 
 // Crear egreso
 app.post("/egresos", async (req, res) => {
-  const descripcion = req.body.descripcion || req.body.description;
-  const monto = req.body.monto || req.body.amount;
-
-  if (!descripcion || !monto) {
-    return res.status(400).json({
-      error: "descripcion y monto son requeridos",
-    });
-  }
+  const { description, amount } = req.body;
 
   try {
     const result = await pool.query(
-      `INSERT INTO transactions (description, amount, type)
-       VALUES ($1, $2, 'egreso')
-       RETURNING *`,
-      [descripcion, monto]
+      "INSERT INTO transactions (description, amount, type) VALUES ($1, $2, 'egreso') RETURNING *",
+      [description, amount]
     );
 
     res.status(201).json(result.rows[0]);
   } catch (error) {
-    console.error("ERROR EGRESO:", error.message);
+    console.error("ERROR EGRESOS:", error);
     res.status(500).json({ error: "Error al crear egreso" });
   }
 });
@@ -104,7 +81,7 @@ app.get("/egresos", async (req, res) => {
     );
     res.json(result.rows);
   } catch (error) {
-    console.error(error.message);
+    console.error(error);
     res.status(500).json({ error: "Error al obtener egresos" });
   }
 });
@@ -112,7 +89,35 @@ app.get("/egresos", async (req, res) => {
 // =======================
 // BALANCE
 // =======================
+
 app.get("/balance", async (req, res) => {
   try {
     const ingresos = await pool.query(
-      "SELECT COALESCE(SUM(amount), 0) AS total FROM transactions WHERE type = 'ingreso'
+      "SELECT COALESCE(SUM(amount), 0) AS total FROM transactions WHERE type = 'ingreso'"
+    );
+
+    const egresos = await pool.query(
+      "SELECT COALESCE(SUM(amount), 0) AS total FROM transactions WHERE type = 'egreso'"
+    );
+
+    res.json({
+      totalIngresos: Number(ingresos.rows[0].total),
+      totalEgresos: Number(egresos.rows[0].total),
+      balance:
+        Number(ingresos.rows[0].total) -
+        Number(egresos.rows[0].total),
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Error al calcular balance" });
+  }
+});
+
+// =======================
+// SERVER
+// =======================
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Servidor corriendo en puerto ${PORT}`);
+});
