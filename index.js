@@ -5,16 +5,22 @@ const { Pool } = require("pg");
 const app = express();
 app.use(express.json());
 
-// Conexión a PostgreSQL
+// =======================
+// CONEXIÓN POSTGRES (Railway OK)
+// =======================
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
+  ssl: {
+    rejectUnauthorized: false,
+  },
 });
 
-// Ruta base
+// =======================
+// RUTA BASE
+// =======================
 app.get("/", (req, res) => {
   res.send("API de Ingresos y Egresos con PostgreSQL 🚀");
 });
-
 
 // =======================
 // INGRESOS
@@ -22,17 +28,27 @@ app.get("/", (req, res) => {
 
 // Crear ingreso
 app.post("/ingresos", async (req, res) => {
-  const { descripcion, monto } = req.body;
+  // Acepta ambos formatos
+  const descripcion = req.body.descripcion || req.body.description;
+  const monto = req.body.monto || req.body.amount;
+
+  if (!descripcion || !monto) {
+    return res.status(400).json({
+      error: "descripcion y monto son requeridos",
+    });
+  }
 
   try {
     const result = await pool.query(
-      "INSERT INTO transactions (description, amount, type) VALUES ($1, $2, 'ingreso') RETURNING *",
+      `INSERT INTO transactions (description, amount, type)
+       VALUES ($1, $2, 'ingreso')
+       RETURNING *`,
       [descripcion, monto]
     );
 
     res.status(201).json(result.rows[0]);
   } catch (error) {
-    console.error(error);
+    console.error("ERROR INGRESO:", error.message);
     res.status(500).json({ error: "Error al crear ingreso" });
   }
 });
@@ -45,11 +61,10 @@ app.get("/ingresos", async (req, res) => {
     );
     res.json(result.rows);
   } catch (error) {
-    console.error(error);
+    console.error(error.message);
     res.status(500).json({ error: "Error al obtener ingresos" });
   }
 });
-
 
 // =======================
 // EGRESOS
@@ -57,17 +72,26 @@ app.get("/ingresos", async (req, res) => {
 
 // Crear egreso
 app.post("/egresos", async (req, res) => {
-  const { descripcion, monto } = req.body;
+  const descripcion = req.body.descripcion || req.body.description;
+  const monto = req.body.monto || req.body.amount;
+
+  if (!descripcion || !monto) {
+    return res.status(400).json({
+      error: "descripcion y monto son requeridos",
+    });
+  }
 
   try {
     const result = await pool.query(
-      "INSERT INTO transactions (description, amount, type) VALUES ($1, $2, 'egreso') RETURNING *",
+      `INSERT INTO transactions (description, amount, type)
+       VALUES ($1, $2, 'egreso')
+       RETURNING *`,
       [descripcion, monto]
     );
 
     res.status(201).json(result.rows[0]);
   } catch (error) {
-    console.error(error);
+    console.error("ERROR EGRESO:", error.message);
     res.status(500).json({ error: "Error al crear egreso" });
   }
 });
@@ -80,47 +104,15 @@ app.get("/egresos", async (req, res) => {
     );
     res.json(result.rows);
   } catch (error) {
-    console.error(error);
+    console.error(error.message);
     res.status(500).json({ error: "Error al obtener egresos" });
   }
 });
 
-
 // =======================
 // BALANCE
 // =======================
-
 app.get("/balance", async (req, res) => {
   try {
     const ingresos = await pool.query(
-      "SELECT COALESCE(SUM(amount), 0) AS total FROM transactions WHERE type = 'ingreso'"
-    );
-
-    const egresos = await pool.query(
-      "SELECT COALESCE(SUM(amount), 0) AS total FROM transactions WHERE type = 'egreso'"
-    );
-
-    const totalIngresos = Number(ingresos.rows[0].total);
-    const totalEgresos = Number(egresos.rows[0].total);
-
-    res.json({
-      totalIngresos,
-      totalEgresos,
-      balance: totalIngresos - totalEgresos,
-    });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Error al calcular balance" });
-  }
-});
-
-
-// =======================
-// SERVER
-// =======================
-
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Servidor corriendo en http://localhost:${PORT}`);
-});
-
+      "SELECT COALESCE(SUM(amount), 0) AS total FROM transactions WHERE type = 'ingreso'
