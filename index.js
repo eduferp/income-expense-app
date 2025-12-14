@@ -5,15 +5,19 @@ const { Pool } = require("pg");
 const app = express();
 app.use(express.json());
 
-// Conexión a PostgreSQL
+// =======================
+// CONEXIÓN POSTGRES
+// =======================
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: {
-    rejectUnauthorized: false, // IMPORTANTE para Railway
+    rejectUnauthorized: false, // MUY IMPORTANTE en Railway
   },
 });
 
-// Ruta base
+// =======================
+// RUTA BASE
+// =======================
 app.get("/", (req, res) => {
   res.send("API de Ingresos y Egresos con PostgreSQL 🚀");
 });
@@ -21,25 +25,26 @@ app.get("/", (req, res) => {
 // =======================
 // INGRESOS
 // =======================
-
-// Crear ingreso
 app.post("/ingresos", async (req, res) => {
   const { description, amount } = req.body;
 
+  if (!description || !amount) {
+    return res.status(400).json({ error: "description y amount son obligatorios" });
+  }
+
   try {
     const result = await pool.query(
-      "INSERT INTO transactions (description, amount, type) VALUES ($1, $2, 'ingreso') RETURNING *",
-      [description, amount]
+      "INSERT INTO transactions (description, amount, type) VALUES ($1, $2, $3) RETURNING *",
+      [description, amount, "ingreso"]
     );
 
     res.status(201).json(result.rows[0]);
   } catch (error) {
-    console.error("ERROR INGRESOS:", error);
+    console.error("ERROR POST /ingresos:", error);
     res.status(500).json({ error: "Error al crear ingreso" });
   }
 });
 
-// Listar ingresos
 app.get("/ingresos", async (req, res) => {
   try {
     const result = await pool.query(
@@ -55,25 +60,26 @@ app.get("/ingresos", async (req, res) => {
 // =======================
 // EGRESOS
 // =======================
-
-// Crear egreso
 app.post("/egresos", async (req, res) => {
   const { description, amount } = req.body;
 
+  if (!description || !amount) {
+    return res.status(400).json({ error: "description y amount son obligatorios" });
+  }
+
   try {
     const result = await pool.query(
-      "INSERT INTO transactions (description, amount, type) VALUES ($1, $2, 'egreso') RETURNING *",
-      [description, amount]
+      "INSERT INTO transactions (description, amount, type) VALUES ($1, $2, $3) RETURNING *",
+      [description, amount, "egreso"]
     );
 
     res.status(201).json(result.rows[0]);
   } catch (error) {
-    console.error("ERROR EGRESOS:", error);
+    console.error("ERROR POST /egresos:", error);
     res.status(500).json({ error: "Error al crear egreso" });
   }
 });
 
-// Listar egresos
 app.get("/egresos", async (req, res) => {
   try {
     const result = await pool.query(
@@ -89,13 +95,11 @@ app.get("/egresos", async (req, res) => {
 // =======================
 // BALANCE
 // =======================
-
 app.get("/balance", async (req, res) => {
   try {
     const ingresos = await pool.query(
       "SELECT COALESCE(SUM(amount), 0) AS total FROM transactions WHERE type = 'ingreso'"
     );
-
     const egresos = await pool.query(
       "SELECT COALESCE(SUM(amount), 0) AS total FROM transactions WHERE type = 'egreso'"
     );
@@ -116,7 +120,6 @@ app.get("/balance", async (req, res) => {
 // =======================
 // SERVER
 // =======================
-
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Servidor corriendo en puerto ${PORT}`);
